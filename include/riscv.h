@@ -1,3 +1,6 @@
+#ifndef _RISCV_H_
+#define _RISCV_H_
+
 #ifndef __ASSEMBLER__
 
 // which hart (core) is this?
@@ -331,6 +334,8 @@ typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
 
 #endif // __ASSEMBLER__
+#endif // _RISCV_H_
+
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page

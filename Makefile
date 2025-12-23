@@ -4,6 +4,7 @@
 K = kernel
 SRC = kernel/boot
 BUILD_DIR = build
+.DEFAULT_GOAL := all
 
 # ===== 并行编译配置 =====
 NPROC := $(shell nproc 2>/dev/null || echo 1)
@@ -21,6 +22,11 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' 
 	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
 	echo "*** To turn off this error, run 'make TOOLPREFIX= ...'." 1>&2; \
 	echo "***" 1>&2; exit 1; fi)
+endif
+
+# 在检测 TOOLPREFIX 之后加：
+ifeq ($(strip $(TOOLPREFIX)),)
+$(error TOOLPREFIX is empty. Please install riscv64 toolchain and run: make TOOLPREFIX=riscv64-linux-gnu-)
 endif
 
 # ===== 工具定义 =====
@@ -58,32 +64,70 @@ endif
 # ===== 链接选项 =====
 LDFLAGS = -z max-page-size=4096
 
+
 # ===== 源文件定义 - 完整的三阶段启动 =====
 # entry.S -> start.c -> kmain.c
-CORE_SRCS := entry.S start.c kmain.c uart.c
+CORE_SRCS := entry.S start.c kmain.c uart.c trap.S
 SRCS := $(addprefix $(SRC)/, $(CORE_SRCS))
-OBJS := $(patsubst $(SRC)/%.c, $(BUILD_DIR)/%.o, $(filter %.c, $(SRCS)))
-OBJS += $(patsubst $(SRC)/%.S, $(BUILD_DIR)/%.o, $(filter %.S, $(SRCS)))
+SRCS += kernel/mm/pmm.c kernel/mm/pmem.c kernel/mm/vmem.c
+SRCS += kernel/spinlock.c kernel/proc.c kernel/swtch.S kernel/test_proc.c
+SRCS += kernel/syscall.c kernel/sysproc.c kernel/uaccess.c
+SRCS += kernel/trap.c
+SRCS += kernel/test.c kernel/test_vm.c kernel/test_ext.c kernel/test_trap.c
+SRCS += kernel/printf.c
+OBJS := $(patsubst %.c, $(BUILD_DIR)/%.o, $(filter %.c, $(SRCS)))
+OBJS += $(patsubst %.S, $(BUILD_DIR)/%.o, $(filter %.S, $(SRCS)))
 
 # 确保entry.o在最前面（链接顺序重要）
-ENTRY_OBJ := $(BUILD_DIR)/entry.o
+ENTRY_OBJ := $(BUILD_DIR)/kernel/boot/entry.o
 OBJS_NO_ENTRY := $(filter-out $(ENTRY_OBJ), $(OBJS))
 DEPS := $(OBJS:.o=.d)
 
+
 # ===== 默认目标 =====
-all: $K/kernel
+# 默认编译物理内存测试
+all: test_phys
+
+# 物理内存测试目标
+test_phys: $(ENTRY_OBJ) $(OBJS_NO_ENTRY) $(SRC)/kernel.ld
+	@mkdir -p $K
+	@echo "Linking kernel (physical memory test)..."
+	$(LD) $(LDFLAGS) -T $(SRC)/kernel.ld -o $K/kernel $(ENTRY_OBJ) \
+		$(OBJS_NO_ENTRY)
+	@echo "Generating assembly listing..."
+	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
+	@echo "Generating symbol table..."
+	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
+	@echo "✅ Kernel (physical memory test) built successfully!"
+
+# 虚拟内存测试目标
+test_vm: $(ENTRY_OBJ) $(OBJS_NO_ENTRY) $(SRC)/kernel.ld
+	@mkdir -p $K
+	@echo "Linking kernel (virtual memory test)..."
+	$(LD) $(LDFLAGS) -T $(SRC)/kernel.ld -o $K/kernel $(ENTRY_OBJ) \
+		$(OBJS_NO_ENTRY)
+	@echo "Generating assembly listing..."
+	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
+	@echo "Generating symbol table..."
+	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
+	@echo "✅ Kernel (virtual memory test) built successfully!"
+
+# 兼容原有目标
+$K/kernel: test_phys
 
 # ===== 创建构建目录 =====
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
 # ===== 编译规则 =====
-$(BUILD_DIR)/%.o: $(SRC)/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
 	@echo "Compiling C file: $<"
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC)/%.S | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.S | $(BUILD_DIR)
 	@echo "Compiling assembly: $<"
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # ===== 内核链接 =====
@@ -216,8 +260,8 @@ help:
 	@echo "   test          - Run comprehensive tests"
 	@echo ""
 	@echo "🚀 Testing targets:"
-	@echo "   qemu          - Run kernel in QEMU"
-	@echo "   qemu-gdb      - Run with GDB support"
+	@echo "   qemu          - Run kernel in QEMU (virt, -nographic)"
+	@echo "   qemu-gdb      - Run with GDB support (virt, -nographic)"
 	@echo "   gdb           - Start GDB debugger"
 	@echo ""
 	@echo "🛠️  Debug targets:"

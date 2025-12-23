@@ -11,3 +11,9 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
+
+// Scheduling defaults
+#define TIME_SLICE_TICKS 5
+#define SCHED_AGING_TICKS 200
+#define PRIORITY_DEFAULT 10
+#define PRIORITY_MIN     0

@@ -1,3 +1,11 @@
+// include/defs.h
+#ifndef _DEFS_H_
+#define _DEFS_H_
+
+#include "types.h"
+#include "riscv.h"
+
+// 前置声明（避免互相 include 炸裂）
 struct buf;
 struct context;
 struct file;
@@ -9,6 +17,14 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+// Sv39 相关类型：放在这里保证声明可见
+typedef uint64* pagetable_t;
+typedef uint64  pte_t;
+
+// number of elements in fixed-size array
+#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+// ------------------ 以下保持你原来的函数声明即可 ------------------
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -77,7 +93,7 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-void            printf(char*, ...);
+int             printf(const char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
@@ -85,7 +101,6 @@ void            printfinit(void);
 int             cpuid(void);
 void            exit(int);
 int             fork(void);
-int             growproc(int);
 void            proc_mapstacks(pagetable_t);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
@@ -125,15 +140,6 @@ void            acquiresleep(struct sleeplock*);
 void            releasesleep(struct sleeplock*);
 int             holdingsleep(struct sleeplock*);
 void            initsleeplock(struct sleeplock*, char*);
-
-// string.c
-int             memcmp(const void*, const void*, uint);
-void*           memmove(void*, const void*, uint);
-void*           memset(void*, int, uint);
-char*           safestrcpy(char*, const char*, int);
-int             strlen(const char*);
-int             strncmp(const char*, const char*, uint);
-char*           strncpy(char*, const char*, int);
 
 // syscall.c
 void            argint(int, int*);
@@ -187,5 +193,4 @@ void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
-// number of elements in fixed-size array
-#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+#endif // _DEFS_H_
